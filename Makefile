@@ -1,5 +1,5 @@
 CXX = g++
-CXXFLAGS = -std=c++17 -pthread -Wall -Wextra -Isrc
+CXXFLAGS = -std=c++17 -pthread -Wall -Wextra -Iinclude
 
 SRC_FILES = src/engines.cpp src/simulator.cpp
 TEST_FILE = tests/test_simulator.cpp

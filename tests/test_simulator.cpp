@@ -1,4 +1,4 @@
-#include "../src/simulator.hpp"
+#include "simulator.hpp"
 #include <iostream>
 #include <cassert>
 #include <vector>
