@@ -1,35 +1,44 @@
 #pragma once
-#include "engines.hpp"
+#include <vector>
+#include <iostream>
+#include "common.hpp"
 #include "status_register.hpp"
-#include "memory.hpp"
-#include "commands.hpp"
+#include "memory/scratchpad.hpp"
+#include "memory/local_memory.hpp"
+#include "engines/sdma_engine.hpp"
+#include "engines/idma_engine.hpp"
+#include "engines/mxu_engine.hpp"
+#include "engines/vector_engine.hpp"
 
 class Simulator {
 public:
-    Simulator()
-        : sdma(status_reg, scratchpad),
-          idma(status_reg, scratchpad, local_mem[0], local_mem[1]),
-          pu0(status_reg, local_mem[0], STATUS_PU0_CMD_BUSY),
-          pu1(status_reg, local_mem[1], STATUS_PU1_CMD_BUSY)
-    {}
+    Simulator();
 
-    void dispatch_packet(const VLIWPacket& packet);
+    void load_program(const std::vector<VLIWPacket>& program);
+    void run(int max_cycles);
 
-    // Direct access for testing verification
-    StatusRegister& get_scoreboard() { return status_reg; }
-    Scratchpad& get_scratchpad() { return scratchpad; }
-    LocalMemory& get_local_mem(int pu_idx) {
-        if (pu_idx < 0 || pu_idx > 1) throw std::out_of_range("Invalid PU index");
-        return local_mem[pu_idx];
+    // Single step of the cycle-accurate simulation
+    void step();
+
+    bool is_busy() const {
+        return sdma.is_busy() || idma.is_busy() || mxu.is_busy() || vector_unit.is_busy();
     }
 
 private:
     StatusRegister status_reg;
     Scratchpad scratchpad;
-    LocalMemory local_mem[2]; // 0 for PU0, 1 for PU1
+    LocalMemory local_memory;
 
     SDMAEngine sdma;
     IDMAEngine idma;
-    ComputeEngine pu0;
-    ComputeEngine pu1;
+    MXUEngine mxu;
+    VectorEngine vector_unit;
+
+    std::vector<VLIWPacket> instruction_memory;
+    int pc;
+    long cycle_count;
+
+    void dispatch_packet(const VLIWPacket& packet);
+    bool check_structural_hazard(const VLIWPacket& packet) const;
+    void log_state(const std::string& action);
 };
