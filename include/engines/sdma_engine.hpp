@@ -4,12 +4,9 @@
 
 class SDMAEngine : public Engine {
 public:
-    SDMAEngine(StatusRegister& sr, Scratchpad& sp);
+    SDMAEngine(Scratchpad& sp);
 
     void process(const DMA_Command& cmd);
-
-protected:
-    void on_complete() override;
 
 private:
     Scratchpad& scratchpad;

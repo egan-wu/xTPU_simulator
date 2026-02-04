@@ -5,18 +5,17 @@
 
 class IDMAEngine : public Engine {
 public:
-    IDMAEngine(StatusRegister& sr, Scratchpad& sp, LocalMemory& lm);
+    IDMAEngine(Scratchpad& sp, LocalMemory& lm0, LocalMemory& lm1);
 
     void process(const DMA_Command& cmd);
 
-protected:
-    void on_complete() override;
+    // Helper to get the cleared mask *after* tick() returns true
+    uint32_t get_completed_mask() const { return current_busy_mask; }
 
 private:
     Scratchpad& scratchpad;
-    LocalMemory& local_memory;
+    LocalMemory& local_memory0;
+    LocalMemory& local_memory1;
 
-    // We need to know WHICH busy bit to clear when done
-    // Since iDMA can target different banks, we store the current mask
     uint32_t current_busy_mask;
 };

@@ -4,16 +4,18 @@
 
 class Engine {
 public:
-    Engine(StatusRegister& sr) : status_reg(sr), remaining_cycles(0) {}
+    Engine() : remaining_cycles(0) {}
     virtual ~Engine() = default;
 
-    virtual void tick() {
+    // Returns true if the operation JUST completed in this tick
+    virtual bool tick() {
         if (remaining_cycles > 0) {
             remaining_cycles--;
             if (remaining_cycles == 0) {
-                on_complete();
+                return true; // Just finished
             }
         }
+        return false;
     }
 
     bool is_busy() const {
@@ -21,8 +23,5 @@ public:
     }
 
 protected:
-    StatusRegister& status_reg;
     uint32_t remaining_cycles;
-
-    virtual void on_complete() = 0;
 };

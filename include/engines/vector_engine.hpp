@@ -3,10 +3,7 @@
 
 class VectorEngine : public Engine {
 public:
-    VectorEngine(StatusRegister& sr);
+    VectorEngine();
 
     void process(const Compute_Command& cmd);
-
-protected:
-    void on_complete() override;
 };
