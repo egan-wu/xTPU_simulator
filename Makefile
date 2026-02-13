@@ -1,15 +1,33 @@
 CXX = g++
-CXXFLAGS = -std=c++17 -pthread -Wall -Wextra -Iinclude
+CXXFLAGS = -std=c++17 -Wall -Wextra -Iinclude
+BUILD_DIR = build
 
-SRC_FILES = src/engines.cpp src/simulator.cpp
-TEST_FILE = tests/test_simulator.cpp
+# Source files
+SRCS = src/main.cpp \
+       src/control_unit.cpp \
+       src/engines/sdma_engine.cpp \
+       src/engines/idma_engine.cpp \
+       src/engines/mxu_engine.cpp \
+       src/engines/vector_engine.cpp \
+       src/engines/processing_unit.cpp
 
-TARGET = test_simulator
+# Object files (mapped to build directory)
+OBJS = $(SRCS:%.cpp=$(BUILD_DIR)/%.o)
+
+# Target executable
+TARGET = tpu_simulator
 
 all: $(TARGET)
 
-$(TARGET): $(SRC_FILES) $(TEST_FILE)
-	$(CXX) $(CXXFLAGS) $^ -o $@
+$(TARGET): $(OBJS)
+	$(CXX) $(CXXFLAGS) -o $@ $^
+
+# Rule for object files
+$(BUILD_DIR)/%.o: %.cpp
+	@mkdir -p $(dir $@)
+	$(CXX) $(CXXFLAGS) -c $< -o $@
 
 clean:
-	rm -f $(TARGET)
+	rm -rf $(BUILD_DIR) $(TARGET)
+
+.PHONY: all clean
