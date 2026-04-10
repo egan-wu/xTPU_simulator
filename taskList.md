@@ -1157,9 +1157,10 @@ LPDDR5 路徑會以 2 GHz 計算延遲，Compute 路徑卻以 1 GHz 換算 ms—
 ---
 
 ### P5-1: xTPU MLIR Dialect 定義
-**狀態**: ❌ 未開始
+**狀態**: ✅ Spec 完成 (2026-04-10)
 **位置**: `compiler/include/xtpu/IR/XTPUOps.td`、`compiler/lib/IR/`
-**前置**: P5-0
+**Spec 文件**: `docs/DialectSpec.md`
+**前置**: P5-0 ✅
 
 **目標**: 定義最接近硬體的 MLIR 抽象層 `xtpu` dialect，直接對應 `VLIWPacket` 結構。
 
