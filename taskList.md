@@ -1120,8 +1120,13 @@ LPDDR5 路徑會以 2 GHz 計算延遲，Compute 路徑卻以 1 GHz 換算 ms—
 ---
 
 ### P5-0: 策略決策與 Scope 定義
-**狀態**: ❌ 未開始
+**狀態**: ✅ 決策完成 (2026-04-10)
 **產出**: `docs/compiler_strategy.md`（新檔）
+
+**已定案決策**:
+- **MLIR 整合方式**: Git submodule（llvm-project pin 到特定 tag，cmake 一起 build）
+- **ONNX Runtime 角色**: Golden reference（離線比對 numerical correctness）
+- **前端模型格式**: ONNX（經 onnx-mlir 參考 import 進入 MLIR）
 
 **LPU 核心理念對照表（哪些要照搬、哪些要修改）**:
 
@@ -1137,10 +1142,11 @@ LPDDR5 路徑會以 2 GHz 計算延遲，Compute 路徑卻以 1 GHz 換算 ms—
 
 **Scope 關鍵決策（建議預設）**:
 
-| 決策點 | 候選 | 推薦 | 理由 |
-|--------|------|------|------|
-| Frontend 模型格式 | (A) ONNX (B) StableHLO (C) TOSA (D) PyTorch FX | **(A) ONNX → 經 onnx-mlir 進入 (C) TOSA** | ONNX 是生態入口，TOSA 是 MLIR 原生規格 |
-| LLVM/MLIR 取得方式 | (A) fork in-tree (B) external project | **(B) external** | 主 repo 保持輕量；用 `find_package(MLIR REQUIRED)` |
+| 決策點 | 候選 | **決定** | 理由 |
+|--------|------|----------|------|
+| Frontend 模型格式 | (A) ONNX (B) StableHLO (C) TOSA (D) PyTorch FX | ✅ **(A) ONNX → 經 onnx-mlir 進入 (C) TOSA** | ONNX 是生態入口，TOSA 是 MLIR 原生規格 |
+| LLVM/MLIR 取得方式 | (A) fork in-tree (B) git submodule (C) system dep | ✅ **(B) git submodule** | 版本鎖定、CI reproducible，首次 build ~30min 可接受 |
+| ONNX Runtime 角色 | (A) Golden reference (B) CI fuzz oracle (C) 不整合 | ✅ **(A) Golden reference** | 離線跑 per-layer tensor，xTPU 需 bit-exact match（INT8）|
 | 目標檔案格式 | (A) raw blob (B) ELF-like container (C) JSON+blob | **(B) ELF-like** | 有 section / symbol，便於 debug 與未來真實硬體 |
 | MVP op 集合 | (A) 僅 matmul+add (B) TOSA MVP set (C) 完整 TOSA | **(A) → (B) 漸進** | 先打通 pipeline，再擴覆蓋 |
 | 數值精度 | (A) FP32 (B) INT8 (C) Mixed | **(B) INT8** | 對齊 ComputeEngine 現有 uint8_t 實作 |
@@ -1447,14 +1453,16 @@ P5-0 (策略)
 
 ### Phase 5 必要前置準備（在開動前先處理）
 
-| 前置項目 | 為何需要 | 急迫度 |
-|----------|----------|--------|
-| `P3-CR-6`（xtpu_tck_ps 一致性）| Compiler 排程依賴可信的 latency 查表 | ★★★ |
-| `P4-1`（Perf counters）| 驗證 scheduler make-span / engine util | ★★★ |
-| `P4-2`（Logging）| Compiler 開發階段可觀測性 | ★★ |
-| LPDDR5 row-hit / row-miss 模型校準 | 影響 compiler 的 prefetch 決策 | ★★ |
-| 決定 LLVM/MLIR 取得方式（in-tree or external）| 影響 build system / CI | ★★★ |
-| 準備 ONNX Runtime 作為 reference | P5-8 的 golden 來源 | ★★ |
+| 前置項目 | 為何需要 | 急迫度 | 狀態 |
+|----------|----------|--------|------|
+| `P3-CR-6`（xtpu_tck_ps 一致性）| Compiler 排程依賴可信的 latency 查表 | ★★★ | ✅ 完成 |
+| `P4-1`（Perf counters）| 驗證 scheduler make-span / engine util | ★★★ | ✅ 完成 |
+| `P4-2`（Logging）| Compiler 開發階段可觀測性 | ★★ | ✅ 完成（導入率待提升）|
+| LPDDR5 row-hit / row-miss 模型校準 | 影響 compiler 的 prefetch 決策 | ★★ | ✅ Test 26 驗證通過 |
+| 決定 LLVM/MLIR 取得方式 | 影響 build system / CI | ★★★ | ✅ Git submodule |
+| 準備 ONNX Runtime 作為 reference | P5-8 的 golden 來源 | ★★ | ✅ Golden reference 方案確定 |
+
+**所有前置準備已完成，Phase 5 可以正式啟動。** (2026-04-10)
 
 ---
 
