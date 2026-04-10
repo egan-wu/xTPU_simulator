@@ -1,0 +1,19 @@
+# Build artifacts
+*.o
+*.d
+test_simulator
+
+# OS
+.DS_Store
+
+# IDE
+.vscode/
+.idea/
+
+# lpddr5-sim submodule build output
+submodule/lpddr5-sim/build/
+
+# CMake (top-level, if any)
+build/
+CMakeCache.txt
+cmake_install.cmake
