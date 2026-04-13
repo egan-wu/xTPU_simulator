@@ -1198,25 +1198,34 @@ xtpu.program @tiny_mlp {
 ---
 
 ### P5-2: Model Frontend — ONNX → TOSA → Linalg
-**狀態**: ❌ 未開始
+**狀態**: ✅ 完成 (2026-04-12)
 **位置**: `compiler/tools/xtpu-import/`
 **前置**: P5-0
 
 **流程**:
 ```
 model.onnx
-   │ (onnx-mlir 或 iree-import-onnx)
+   │ (xtpu-import — 自製 Python 工具)
    ▼
 TOSA dialect (.mlir)
-   │ (--tosa-to-linalg)
+   │ (xtpu-opt --tosa-to-linalg-pipeline)
    ▼
 Linalg-on-tensors (.mlir)
 ```
 
-**交付物**:
-- CLI 工具 `xtpu-import model.onnx -o model.linalg.mlir`
-- MVP 支援的 op 清單（依 P5-0 決定）
-- 不支援的 op 必須輸出明確錯誤：層名 / op 名 / 建議替代方案
+**已完成項目**:
+- ✅ CLI 工具 `xtpu-import model.onnx -o model.tosa.mlir`
+  - 支援 op: MatMul, Gemm, Add, Relu, Reshape, Transpose, Constant
+  - 不支援 op 輸出明確錯誤（op 名 + 建議）
+  - `--emit-linalg` flag 自動呼叫 xtpu-opt/mlir-opt 完成 TOSA→Linalg 降級
+  - `--list-ops` flag 顯示模型所有 op
+- ✅ xtpu-opt 整合所有上游 dialect 與 pass（MLIRRegisterAllDialects/Passes）
+  - 可直接執行 `xtpu-opt input.mlir --tosa-to-linalg-pipeline`
+- ✅ 3 個測試模型全部通過端到端驗證：
+  - `single_matmul_i8.onnx` → TOSA → Linalg (batch_matmul)
+  - `two_layer_mlp_i8.onnx` → TOSA → Linalg (matmul + add + relu + matmul + add)
+  - `gemm_mlp_i8.onnx` → TOSA → Linalg (transpose + reshape + matmul + add)
+- ✅ 相容 LLVM 22.1.2 TOSA API（4-operand matmul, attribute-based transpose, const_shape reshape）
 
 ---
 
