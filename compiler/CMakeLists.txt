@@ -34,11 +34,17 @@ add_definitions(${LLVM_DEFINITIONS})
 # TableGen targets — generate .inc files from .td
 # ---------------------------------------------------------------------------
 add_subdirectory(include/xtpu/IR)
+add_subdirectory(include/xtpu/Transforms)
 
 # ---------------------------------------------------------------------------
 # Dialect library
 # ---------------------------------------------------------------------------
 add_subdirectory(lib/IR)
+
+# ---------------------------------------------------------------------------
+# Transformation passes
+# ---------------------------------------------------------------------------
+add_subdirectory(lib/Transforms)
 
 # ---------------------------------------------------------------------------
 # Tools (xtpu-opt)

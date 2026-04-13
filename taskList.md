@@ -1230,17 +1230,34 @@ Linalg-on-tensors (.mlir)
 ---
 
 ### P5-3: Lowering Pipeline — Linalg → xTPU Dialect
-**狀態**: ❌ 未開始
-**位置**: `compiler/lib/Conversion/`
+**狀態**: ✅ 完成 (2026-04-13)
+**位置**: `compiler/lib/Transforms/LinalgToXTPU.cpp`
 **前置**: P5-1, P5-2
 
-**Pass pipeline（順序）**:
-1. **`tile-and-fuse`**：將 tensor ops 切成 fit-LocalMem 的 tile（先以現有 4×4 MATMUL 為基本 tile）
-2. **`bufferize`**：tensor → memref（為靜態分配做準備）
-3. **`lower-linalg-to-xtpu`**：`linalg.matmul` → `xtpu.compute { type = matmul }` 等
-4. **`insert-data-movement`**：在 compute op 前後**自動插入** `xtpu.sdma` / `xtpu.idma`
-   （這就是 LPU 精神：**所有資料搬移都顯式化、由 compiler 負責**）
-5. **`legalize-addresses`**：把 symbolic memref 換成靜態位址（依賴 P5-4 的結果）
+**已實作的 `--linalg-to-xtpu` pass**（合併步驟 1-5 為單一 pass，MVP 簡化）:
+1. ~~tile-and-fuse~~：MVP 已是 4×4，不需 tiling
+2. ~~bufferize~~：直接從 tensor 語義 mapping 到靜態地址
+3. **lower-linalg-to-xtpu**：`linalg.batch_matmul` → `xtpu.compute { type = matmul }`
+4. **insert-data-movement**：自動插入 `xtpu.sdma` / `xtpu.idma`
+5. **legalize-addresses**：MVP 使用 bump allocator（System Memory → Scratchpad → LocalMem）
+
+**支援的 Linalg ops**:
+- ✅ `linalg.batch_matmul` → matmul compute + SDMA/IDMA 搬移
+- ✅ `linalg.generic` (add) → scalar compute（dst[i] = src[i] + 1）
+- ✅ `linalg.generic` (relu/maxsi) → no-op（MVP ISA 無 ReLU 硬體支援）
+- ✅ `linalg.transpose` → copy（MVP limitation）
+- ✅ `tosa.reshape` / `tosa.const_shape` → passthrough
+
+**全端到端驗證（ONNX → TOSA → Linalg → xTPU）**:
+- ✅ `single_matmul_i8.onnx` → 7 packets (SDMA→IDMA→matmul→IDMA→SDMA→drain)
+- ✅ `two_layer_mlp_i8.onnx` → 16 packets (matmul→scalar→relu_noop→matmul→drain)
+- ✅ `gemm_mlp_i8.onnx` → 11 packets (transpose_copy→matmul→scalar→drain)
+
+**MVP 限制**（未來 P5-4/P5-5 解決）:
+- 只支援 4×4 tile、batch=1
+- 單 PU（pu0, buffer 0）
+- 串行執行（無 double-buffering/overlap）
+- 無 ReLU 硬體支援
 
 ---
 

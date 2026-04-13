@@ -9,6 +9,7 @@ add_llvm_executable(xtpu-opt
 target_link_libraries(xtpu-opt
   PRIVATE
   XTPUDialect
+  XTPUTransforms
   ${dialect_libs}
   ${conversion_libs}
   ${extension_libs}

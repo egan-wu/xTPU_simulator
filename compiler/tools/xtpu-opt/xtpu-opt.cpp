@@ -18,11 +18,15 @@
 #include "mlir/Tools/mlir-opt/MlirOptMain.h"
 #include "xtpu/IR/XTPUDialect.h"
 #include "xtpu/IR/XTPUOps.h"
+#include "xtpu/Transforms/Passes.h"
 
 int main(int argc, char **argv) {
   // Register all upstream dialects and passes so we can use
   // --tosa-to-linalg-pipeline, --linalg-bufferize, etc.
   mlir::registerAllPasses();
+
+  // Register xTPU-specific passes (--linalg-to-xtpu, etc.)
+  mlir::xtpu::registerPasses();
 
   mlir::DialectRegistry registry;
   mlir::registerAllDialects(registry);
