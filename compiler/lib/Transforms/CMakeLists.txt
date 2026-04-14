@@ -1,5 +1,7 @@
 add_mlir_dialect_library(XTPUTransforms
   LinalgToXTPU.cpp
+  XTPUMemoryPlan.cpp
+  XTPUSchedule.cpp
 
   DEPENDS
   XTPUTransformsIncGen

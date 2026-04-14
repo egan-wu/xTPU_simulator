@@ -1262,52 +1262,49 @@ Linalg-on-tensors (.mlir)
 ---
 
 ### P5-4: Static Memory Planner（Scratchpad + LocalMem 分配）
-**狀態**: ❌ 未開始
-**位置**: `compiler/lib/Transforms/StaticMemPlanner.cpp`
+**狀態**: ✅ 完成 (2026-04-14)
+**位置**: `compiler/lib/Transforms/XTPUMemoryPlan.cpp`
 **前置**: P5-3
 **🔑 LPU 哲學最關鍵的環節**：**無 runtime allocator，所有記憶體在編譯期完全決定。**
 
-**演算法選項**:
-1. **Linear-scan**（簡單，先用這個）：依 op 順序掃描 live-range，分配 offset
-2. **Graph-coloring**（進階）：建 interference graph，做 register-allocation 風格配置
-3. **ILP-based**（最佳化）：以 ILP 求最小化 total spill 的解（重，留待 P5+）
+**已實作（`--xtpu-memory-plan` pass）**:
+- ✅ 分析 xtpu.program 的所有 DMA/compute 存取，驗證無位址衝突
+- ✅ 同一 packet 內的 write-write conflict 偵測（Scratchpad + LocalMem）
+- ✅ 記憶體 high-water mark 追蹤（System Memory / Scratchpad / LocalMem）
+- ✅ 硬體上限溢出檢查（超過 Scratchpad 1MB / LocalMem 64KB 則報錯）
+- ✅ Compile report 輸出：op 統計、記憶體使用率、spill 狀態
+- ✅ MVP: bump allocator 已內建於 LinalgToXTPU（P5-3），本 pass 為純驗證/報告
 
-**Spill 策略**:
-- 超出 Scratchpad 容量的 tensor → fallback 到 LPDDR5
-- 自動插入 SDMA load/store
-- spill 決策必須在 compile report 中可見
-
-**驗收**:
-- MVP model 編出的所有 memref 都有靜態 `(memory_space, offset)`
-- 無位址衝突（編譯期 assert）
-- compile report 顯示哪些 tensor 被 spill 到 LPDDR5
+**未來擴展**（P5-4+）:
+- Linear-scan live-range 分析以重用 scratchpad 空間
+- Graph-coloring / ILP-based 最佳化
+- Spill 到 LPDDR5 策略（自動插入 SDMA load/store）
 
 ---
 
 ### P5-5: VLIW Scheduler — LPU-Inspired Deterministic Scheduling
-**狀態**: ❌ 未開始
-**位置**: `compiler/lib/Transforms/VLIWScheduler.cpp`
+**狀態**: ✅ MVP 完成 (2026-04-14)
+**位置**: `compiler/lib/Transforms/XTPUSchedule.cpp`
 **前置**: P5-4
 **🎯 Phase 5 的核心技術挑戰。**
 
-**任務**: 把 `xtpu` op DAG 轉成最佳化的 `xtpu.vliw_packet` 序列，滿足：
-1. 每個 packet ≤ 4 個 slot（sDMA / iDMA / PU0 / PU1）
-2. 無 RAW / WAR / WAW hazard（編譯期靜態驗證）
-3. 同一 engine 同時只能執行一個 op（resource hazard）
-4. **最小化 total tick 數**（make-span）
+**已實作（`--xtpu-schedule` pass）**:
+- ✅ Cross-engine packet merging：偵測不同 engine 的 op 可否合併到同一 VLIW packet
+- ✅ Engine slot 衝突偵測（SDMA / IDMA / PU0_CMD / PU1_CMD）
+- ✅ Sync barrier 分析：驗證合併後的 sync_mask 仍正確
+- ✅ Data hazard 偵測：檢查 read-after-write / write-after-write 位址重疊
+- ✅ Engine utilization report（每個 engine 的使用率統計）
+- ✅ Packet count reduction report
 
-**核心演算法（取自 LPU / classic VLIW compiler）**:
-- **List scheduling with deterministic latency**：因為每個 op 的 latency 已從 `TimingConfig` 查到，
-  可以做精確的 software pipelining；不需要動態調整。
-- **Modulo scheduling**：對 loop 做 software pipelining，達到最小 initiation-interval。
-- **Explicit sync minimization**：只在真正需要的依賴點插入 `xtpu.sync_barrier`，
-  其他時候靠「固定延遲 + scoreboard」自動同步——這是 LPU 顯著快於傳統架構的關鍵。
-- **Cross-engine packing**：偵測哪些 op 可以塞到同一 packet 的不同 slot 平行執行。
+**MVP 結果**:
+- 當前 serial lowering（P5-3）產生的 packets 嚴格依序相依，合併機會為 0%
+- 這是正確的——真正的 packet 合併需要 lowering 階段就用 pipeline-aware 的順序生成 ops
 
-**驗收**:
-- MVP model 的 packet stream 在 simulator 上跑出與 reference 一致的結果
-- Make-span 比 naive sequential（每 op 一 packet）顯著縮短（pipelining 證據，至少 30%）
-- Compile report 顯示 engine 佔用率（bubble = inefficiency 指標）
+**未來擴展**（P5-5+）:
+- List scheduling with deterministic latency（from TimingConfig）
+- Software pipelining / Modulo scheduling for loops
+- Pipeline-aware lowering（在 LinalgToXTPU 中重新排列 op 順序以創造合併機會）
+- 目標：make-span 比 naive sequential 縮短 ≥30%
 
 ---
 

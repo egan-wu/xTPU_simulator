@@ -29,4 +29,34 @@ def LinalgToXTPU : Pass<"linalg-to-xtpu", "mlir::ModuleOp"> {
   ];
 }
 
+def XTPUMemoryPlan : Pass<"xtpu-memory-plan", "mlir::ModuleOp"> {
+  let summary = "Verify and report xTPU static memory allocation";
+  let description = [{
+    Analyzes an xtpu.program and verifies:
+      1. No overlapping writes to the same address range in system memory,
+         scratchpad, or local memory at the same time.
+      2. All addresses fit within hardware bounds.
+      3. Emits a compile report with memory utilization statistics.
+
+    This pass does not modify the IR — it is a pure analysis/verification pass.
+  }];
+  let dependentDialects = ["mlir::xtpu::XTPUDialect"];
+}
+
+def XTPUSchedule : Pass<"xtpu-schedule", "mlir::ModuleOp"> {
+  let summary = "VLIW packet scheduling — merge compatible packets";
+  let description = [{
+    Optimizes the xTPU packet stream by:
+      1. Merging consecutive packets that use different engines
+         (e.g., an SDMA-only packet followed by an IDMA-only packet
+         can be merged into a single VLIW packet).
+      2. Removing redundant sync barriers.
+      3. Emitting engine utilization statistics.
+
+    Correctness invariant: the merged schedule must produce the same
+    memory-visible behavior as the serial schedule.
+  }];
+  let dependentDialects = ["mlir::xtpu::XTPUDialect"];
+}
+
 #endif // XTPU_TRANSFORMS_PASSES_TD
