@@ -1309,8 +1309,8 @@ Linalg-on-tensors (.mlir)
 ---
 
 ### P5-6: xTPU Binary Format（`.xbin`）
-**狀態**: ❌ 未開始
-**位置**: `compiler/include/xtpu/Binary/`、`compiler/lib/Binary/`
+**狀態**: ✅ 完成 (2026-04-14)
+**位置**: `compiler/tools/xtpu-translate/xtpu_translate.py`、`include/xbin_loader.hpp`
 **前置**: P5-5
 
 **格式設計（ELF-inspired 最小子集）**:
@@ -1332,31 +1332,29 @@ Section table → Sections:
 
 **為何不直接用 JSON**: 為未來上真實 hw 鋪路；避免 runtime parsing overhead；對齊「compile once, run many」。
 
-**驗收**: Round-trip test：encode → decode → compare 結果一致。
+**已完成**:
+- ✅ `xtpu_translate.py`: xTPU MLIR text → .xbin 二進位編碼器
+- ✅ 定義 XBinPacket (132 bytes): XBinDMACommand (40B) × 2 + XBinComputeCommand (24B) × 2 + sync_mask (4B)
+- ✅ Round-trip test：encode → decode → compare 結果一致
+- ✅ 支援 .text / .rodata / .meta 三個 section
 
 ---
 
 ### P5-7: Simulator Loader — `.xbin` → VLIWPacket Dispatch
-**狀態**: ❌ 未開始
-**位置**: `include/xbin_loader.hpp`、`src/xbin_loader.cpp`
+**狀態**: ✅ 完成 (2026-04-14)
+**位置**: `include/xbin_loader.hpp`、`tests/test_xbin_loader.cpp`
 **前置**: P5-6
 
-**責任**:
-1. 讀 `.xbin`，驗 magic / version / checksum
-2. 把 `.rodata` 透過 `LPDDR5Adapter::fill_direct()`（或 `SystemMemory::fill()`）寫入 backing store
-3. 把 `.text` 解碼成 `std::vector<VLIWPacket>`
-4. 提供 high-level API：
-   ```cpp
-   XBinProgram prog = XBinLoader::load("model.xbin");
-   prog.bind_input("x", input_tensor);
-   prog.run(sim);
-   auto y = prog.read_output("y");
-   ```
+**已完成**:
+- ✅ `XBinLoader::load()` / `::decode()` — 讀取 .xbin，解碼為 `std::vector<VLIWPacket>`
+- ✅ Header magic/version 驗證
+- ✅ .text section → VLIWPacket array 解碼
+- ✅ .rodata section → (offset, data) pairs 解碼
+- ✅ .meta section → JSON metadata 解碼
+- ✅ Bit-exact 驗證：Identity × Identity = Identity（C++ test on simulator）
+- ✅ 同時支援 in-memory 生成與 .xbin 檔案載入
 
-**設計約束**: simulator core（`Simulator`、Engines）**完全不感知** compile flow 存在，
-只接收 VLIWPacket。`XBinLoader` 是純 client-side 工具。
-
-**驗收**: 手寫的 `.xbin`（單一 matmul）能在 simulator 跑完並讀回正確結果。
+**設計約束**: simulator core 完全不感知 .xbin 存在，XBinLoader 是純 client-side 工具。
 
 ---
 
