@@ -1,0 +1,3 @@
+[submodule "submodule/lpddr5-sim"]
+	path = submodule/lpddr5-sim
+	url = https://github.com/egan-wu/lpddr5-sim.git
