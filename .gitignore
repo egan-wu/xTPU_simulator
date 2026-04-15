@@ -2,6 +2,8 @@
 *.o
 *.d
 test_simulator
+test_xbin_loader
+xbin_runner
 
 # OS
 .DS_Store
@@ -17,3 +19,8 @@ submodule/lpddr5-sim/build/
 **/build/
 CMakeCache.txt
 cmake_install.cmake
+
+# Compiler intermediate outputs (generated, not source)
+compiler/tests/*.xbin
+compiler/tests/*_tosa.mlir
+compiler/tests/*_xtpu.mlir

@@ -76,6 +76,14 @@ asan: CXXFLAGS = $(CXXFLAGS_BASE) -O1 -g -fsanitize=address,undefined
 asan: clean $(TARGET)
 	./$(TARGET)
 
+# ── P5-8: xbin_runner ────────────────────────────────────────────────────────
+XBIN_RUNNER_SRC = tools/xbin_runner.cpp
+XBIN_RUNNER_OBJ = $(XBIN_RUNNER_SRC:.cpp=.o)
+XBIN_RUNNER     = xbin_runner
+
+$(XBIN_RUNNER): $(XBIN_RUNNER_OBJ) src/engines.o src/simulator.o src/lpddr5_adapter.o $(LPDDR5_LIB)
+	$(CXX) $(CXXFLAGS) $^ -o $@
+
 # ── clean ─────────────────────────────────────────────────────────────────────
 clean:
-	rm -f $(TARGET) $(OBJS) $(DEPS)
+	rm -f $(TARGET) $(XBIN_RUNNER) $(OBJS) $(XBIN_RUNNER_OBJ) $(DEPS) tools/*.d

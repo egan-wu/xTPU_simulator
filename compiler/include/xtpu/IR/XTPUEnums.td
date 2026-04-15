@@ -25,15 +25,27 @@ def XTPU_DMADirection : I32EnumAttr<
 
 //===----------------------------------------------------------------------===//
 // ComputeType — maps to ComputeType in commands.hpp
+// Values must match C++ enum: NOP=0, MATMUL=1, VECTOR=2, SCALAR=3, ADD=4, ...
 //===----------------------------------------------------------------------===//
-def XTPU_Compute_Matmul : I32EnumAttrCase<"matmul", 0>;
-def XTPU_Compute_Vector : I32EnumAttrCase<"vector", 1>;
-def XTPU_Compute_Scalar : I32EnumAttrCase<"scalar", 2>;
+def XTPU_Compute_Matmul     : I32EnumAttrCase<"matmul",     1>;
+def XTPU_Compute_Vector     : I32EnumAttrCase<"vector",     2>;
+def XTPU_Compute_Scalar     : I32EnumAttrCase<"scalar",     3>;
+// P5-11: Extended ISA ops
+def XTPU_Compute_Add        : I32EnumAttrCase<"add",        4>;
+def XTPU_Compute_Mul        : I32EnumAttrCase<"mul",        5>;
+def XTPU_Compute_Sub        : I32EnumAttrCase<"sub",        6>;
+def XTPU_Compute_Relu       : I32EnumAttrCase<"relu",       7>;
+def XTPU_Compute_Max        : I32EnumAttrCase<"max",        8>;
+def XTPU_Compute_ReduceSum  : I32EnumAttrCase<"reduce_sum", 9>;
+def XTPU_Compute_ReduceMax  : I32EnumAttrCase<"reduce_max", 10>;
 
 def XTPU_ComputeType : I32EnumAttr<
     "ComputeType",
     "Compute operation type",
-    [XTPU_Compute_Matmul, XTPU_Compute_Vector, XTPU_Compute_Scalar]> {
+    [XTPU_Compute_Matmul, XTPU_Compute_Vector, XTPU_Compute_Scalar,
+     XTPU_Compute_Add, XTPU_Compute_Mul, XTPU_Compute_Sub,
+     XTPU_Compute_Relu, XTPU_Compute_Max,
+     XTPU_Compute_ReduceSum, XTPU_Compute_ReduceMax]> {
   let cppNamespace = "::mlir::xtpu";
 }
 

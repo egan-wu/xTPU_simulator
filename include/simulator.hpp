@@ -95,6 +95,16 @@ public:
     // ── P4-1: PerfCounters API ────────────────────────────────────────────────
     PerfCounters&       get_perf_counters()       { return perf_; }
     const PerfCounters& get_perf_counters() const { return perf_; }
+
+    /// P5-11: Explicitly stop all engine threads before destruction.
+    /// Must be called before Simulator goes out of scope to avoid
+    /// pure virtual function calls during destruction.
+    void shutdown() {
+        sdma_.shutdown();
+        idma_.shutdown();
+        pu0_.shutdown();
+        pu1_.shutdown();
+    }
     void reset_perf_counters()                    { perf_.reset(); }
 
     // ── P2-4: Error Bit API（委派到 StatusRegister）─────────────────────────

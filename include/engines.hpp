@@ -48,12 +48,7 @@ public:
     }
 
     virtual ~Engine() {
-        {
-            std::lock_guard<std::mutex> lock(mtx);
-            running.store(false);  // P0-2: atomic store，語意明確
-        }
-        cv.notify_one();
-        if (worker.joinable()) worker.join();
+        shutdown();
     }
 
     void push_command(const CmdType& cmd) {
@@ -67,6 +62,19 @@ public:
     // P4-1: 設定效能計數器（可選，nullptr 表示不追蹤）。
     // 由 Simulator 在建構後呼叫，Engine 持有 non-owning pointer。
     void set_perf_counters(PerfCounters* pc) { perf_ = pc; }
+
+    /// Stop the worker thread. Safe to call multiple times.
+    /// Derived class destructors MUST call this before their data members
+    /// are destroyed, to prevent the worker thread from calling process()
+    /// through a destroyed vtable (pure virtual function call).
+    void shutdown() {
+        {
+            std::lock_guard<std::mutex> lock(mtx);
+            running.store(false);
+        }
+        cv.notify_one();
+        if (worker.joinable()) worker.join();
+    }
 
 protected:
     StatusRegister&     status_reg;
@@ -112,6 +120,7 @@ public:
     //        scratchpad  是寫入目的地
     SDMAEngine(StatusRegister& sr, SimClock& clock, const TimingConfig& timing,
                IMemoryPort& system_mem, IMemoryPort& scratchpad);
+    ~SDMAEngine() override { shutdown(); }
 protected:
     void process(const DMA_Command& cmd) override;
 private:
@@ -123,6 +132,7 @@ class IDMAEngine : public Engine<DMA_Command> {
 public:
     IDMAEngine(StatusRegister& sr, SimClock& clock, const TimingConfig& timing,
                IMemoryPort& scratchpad, IBufferedMemory& lm0, IBufferedMemory& lm1);
+    ~IDMAEngine() override { shutdown(); }
 protected:
     void process(const DMA_Command& cmd) override;
 private:
@@ -135,6 +145,7 @@ class ComputeEngine : public Engine<Compute_Command> {
 public:
     ComputeEngine(StatusRegister& sr, SimClock& clock, const TimingConfig& timing,
                   IBufferedMemory& lm, uint32_t busy_bit);
+    ~ComputeEngine() override { shutdown(); }
 protected:
     void process(const Compute_Command& cmd) override;
 private:

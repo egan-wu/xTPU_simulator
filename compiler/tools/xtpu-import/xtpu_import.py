@@ -179,6 +179,19 @@ class ONNXToTOSA:
             f': ({in_type}, !tosa.shape<{ndim}>) -> {out_type}')
         return out_ssa
 
+    def emit_cast(self, ssa: str, shape: List[int],
+                  from_dtype: str, to_dtype: str) -> Tuple[str, str]:
+        """Emit tosa.cast and return (new_ssa, to_dtype)."""
+        if from_dtype == to_dtype:
+            return ssa, from_dtype
+        in_type = tensor_type_str(shape, from_dtype)
+        out_type = tensor_type_str(shape, to_dtype)
+        out_ssa = self.fresh_ssa()
+        self.lines.append(
+            f'    {out_ssa} = tosa.cast {ssa} '
+            f': ({in_type}) -> {out_type}')
+        return out_ssa, to_dtype
+
     def convert_matmul(self, node: onnx.NodeProto):
         """MatMul → tosa.matmul (3D batch matmul, i8→i32)."""
         a_name, b_name = node.input[0], node.input[1]
@@ -186,6 +199,12 @@ class ONNXToTOSA:
         b_ssa = self.ensure_value(b_name)
         a_shape, a_dtype = self.values[a_name][1], self.values[a_name][2]
         b_shape, b_dtype = self.values[b_name][1], self.values[b_name][2]
+
+        # Cast i32 inputs back to i8 for quantized matmul
+        if a_dtype == "i32":
+            a_ssa, a_dtype = self.emit_cast(a_ssa, a_shape, "i32", "i8")
+        if b_dtype == "i32":
+            b_ssa, b_dtype = self.emit_cast(b_ssa, b_shape, "i32", "i8")
 
         # Ensure 3D for tosa.matmul
         if len(a_shape) == 2:
@@ -239,6 +258,15 @@ class ONNXToTOSA:
         b_ssa = self.ensure_value(b_name)
         a_shape, a_dtype = self.values[a_name][1], self.values[a_name][2]
         b_shape, b_dtype = self.values[b_name][1], self.values[b_name][2]
+
+        # Track original dimensionality for reshaping back
+        orig_a_ndim = len(a_shape)
+
+        # Cast i32 inputs back to i8 for quantized matmul
+        if a_dtype == "i32":
+            a_ssa, a_dtype = self.emit_cast(a_ssa, a_shape, "i32", "i8")
+        if b_dtype == "i32":
+            b_ssa, b_dtype = self.emit_cast(b_ssa, b_shape, "i32", "i8")
 
         # Handle transB
         if trans_b and len(b_shape) == 2:
@@ -308,6 +336,13 @@ class ONNXToTOSA:
                 f': ({out_type}, {c_type}) -> {out_type}')
             result_ssa = add_ssa
 
+        # Reshape back to 2D if original input was 2D (Gemm is a 2D op)
+        if orig_a_ndim == 2 and len(result_shape) == 3:
+            flat_shape = result_shape[1:]  # drop batch dim [1,M,N] → [M,N]
+            result_ssa = self.emit_reshape(result_ssa, result_shape,
+                                           flat_shape, out_dtype)
+            result_shape = flat_shape
+
         out_name = node.output[0]
         self.values[out_name] = (result_ssa, result_shape, out_dtype)
 
@@ -325,6 +360,15 @@ class ONNXToTOSA:
             if new_b_shape != b_shape:
                 b_ssa = self.emit_reshape(b_ssa, b_shape, new_b_shape, b_dtype)
                 b_shape = new_b_shape
+
+        # Cast to match types if needed (tosa.add requires same element type)
+        if a_dtype != b_dtype:
+            # Promote i8 to i32 (or the wider type)
+            wider = a_dtype if a_dtype == "i32" else b_dtype
+            if a_dtype != wider:
+                a_ssa, a_dtype = self.emit_cast(a_ssa, a_shape, a_dtype, wider)
+            if b_dtype != wider:
+                b_ssa, b_dtype = self.emit_cast(b_ssa, b_shape, b_dtype, wider)
 
         a_type = tensor_type_str(a_shape, a_dtype)
         b_type = tensor_type_str(b_shape, b_dtype)

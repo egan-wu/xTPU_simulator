@@ -114,10 +114,26 @@ TARGET_MAP = {
     "pu01": 3,
 }
 
+# P5-11: Extended compute types
+COMPUTE_ADD        = 4
+COMPUTE_MUL        = 5
+COMPUTE_SUB        = 6
+COMPUTE_RELU       = 7
+COMPUTE_MAX        = 8
+COMPUTE_REDUCE_SUM = 9
+COMPUTE_REDUCE_MAX = 10
+
 COMPUTE_TYPE_MAP = {
-    "matmul": COMPUTE_MATMUL,
-    "vector": COMPUTE_VECTOR,
-    "scalar": COMPUTE_SCALAR,
+    "matmul":     COMPUTE_MATMUL,
+    "vector":     COMPUTE_VECTOR,
+    "scalar":     COMPUTE_SCALAR,
+    "add":        COMPUTE_ADD,
+    "mul":        COMPUTE_MUL,
+    "sub":        COMPUTE_SUB,
+    "relu":       COMPUTE_RELU,
+    "max":        COMPUTE_MAX,
+    "reduce_sum": COMPUTE_REDUCE_SUM,
+    "reduce_max": COMPUTE_REDUCE_MAX,
 }
 
 
@@ -160,13 +176,15 @@ class ComputeCommand:
     src_offset: int = 0
     dst_offset: int = 0
     length: int = 0
+    src2_offset: int = 0  # P5-11: dual-operand second source
 
     def pack(self) -> bytes:
-        """Pack to 24 bytes matching XBinComputeCommand."""
+        """Pack to 28 bytes matching XBinComputeCommand (P5-11)."""
         return struct.pack(
-            "<iIIIII",
+            "<iIIIIII",
             self.type, self.buffer_idx, self.simulated_duration_ms,
-            self.src_offset, self.dst_offset, self.length
+            self.src_offset, self.dst_offset, self.length,
+            self.src2_offset
         )
 
 
@@ -179,10 +197,10 @@ class VLIWPacket:
     sync_mask: int = 0
 
     def pack(self) -> bytes:
-        """Pack to 132 bytes matching XBinPacket (40+40+24+24+4)."""
+        """Pack to 140 bytes matching XBinPacket (40+40+28+28+4) P5-11."""
         data = self.sdma.pack() + self.idma.pack() + self.pu0.pack() + self.pu1.pack()
         data += struct.pack("<I", self.sync_mask)
-        assert len(data) == 132, f"Packet size mismatch: {len(data)} != 132"
+        assert len(data) == 140, f"Packet size mismatch: {len(data)} != 140"
         return data
 
 
@@ -286,7 +304,7 @@ def parse_xtpu_mlir(mlir_text: str):
             )
             continue
 
-        # Parse Compute
+        # Parse Compute (with optional src2_offset for dual-operand ops)
         m = re.match(
             r'xtpu\.compute\s+'
             r'pu\s*=\s*(\d+)\s+'
@@ -294,7 +312,8 @@ def parse_xtpu_mlir(mlir_text: str):
             r'buffer\s*=\s*(\d+)\s+'
             r'src_offset\s*=\s*(\d+)\s+'
             r'dst_offset\s*=\s*(\d+)\s+'
-            r'length\s*=\s*(\d+)',
+            r'length\s*=\s*(\d+)'
+            r'(?:\s+src2_offset\s*=\s*(\d+))?',
             line)
         if m:
             pu = int(m.group(1))
@@ -304,6 +323,7 @@ def parse_xtpu_mlir(mlir_text: str):
                 src_offset=int(m.group(4)),
                 dst_offset=int(m.group(5)),
                 length=int(m.group(6)),
+                src2_offset=int(m.group(7)) if m.group(7) else 0,
             )
             if pu == 0:
                 current_packet.pu0 = cmd
@@ -311,8 +331,22 @@ def parse_xtpu_mlir(mlir_text: str):
                 current_packet.pu1 = cmd
             continue
 
+    # Parse xtpu.rodata from module attributes
+    rodata: List[RodataEntry] = []
+    rodata_match = re.search(
+        r'xtpu\.rodata\s*=\s*"([^"]*)"', mlir_text)
+    if rodata_match:
+        rodata_str = rodata_match.group(1)
+        if rodata_str:
+            for entry in rodata_str.split(';'):
+                if ':' in entry:
+                    offset_str, hex_data = entry.split(':', 1)
+                    offset = int(offset_str)
+                    data = bytes.fromhex(hex_data) if hex_data else b''
+                    rodata.append(RodataEntry(offset=offset, data=data))
+
     meta = MetaInfo(program_name=program_name)
-    return packets, meta
+    return packets, meta, rodata
 
 
 # ---------------------------------------------------------------------------
@@ -401,9 +435,9 @@ def decode_xbin(data: bytes):
         num_packets = struct.unpack_from("<I", data, off)[0]
         off += 4
         for _ in range(num_packets):
-            pkt_data = data[off:off + 132]
+            pkt_data = data[off:off + 140]
             packets.append(pkt_data)
-            off += 132
+            off += 140
 
     # Parse .meta
     meta = {}
@@ -480,7 +514,7 @@ def main():
             mlir_text = f.read()
 
     # Parse
-    packets, meta = parse_xtpu_mlir(mlir_text)
+    packets, meta, rodata = parse_xtpu_mlir(mlir_text)
 
     if not packets:
         print("ERROR: No packets found in input", file=sys.stderr)
@@ -488,9 +522,13 @@ def main():
 
     print(f"Parsed {len(packets)} packets from program @{meta.program_name}",
           file=sys.stderr)
+    if rodata:
+        print(f"  .rodata: {len(rodata)} entries, "
+              f"{sum(len(e.data) for e in rodata)} bytes total",
+              file=sys.stderr)
 
     # Encode
-    xbin_data = encode_xbin(packets, [], meta)
+    xbin_data = encode_xbin(packets, rodata, meta)
 
     if args.round_trip:
         raw_packets, rt_meta, _, _ = decode_xbin(xbin_data)

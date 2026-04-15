@@ -239,7 +239,8 @@ def XTPU_ComputeOp : XTPU_Op<"compute"> {
     I32Attr:$buffer,
     UI32Attr:$src_offset,
     UI32Attr:$dst_offset,
-    UI32Attr:$length
+    UI32Attr:$length,
+    DefaultValuedAttr<UI32Attr, "0">:$src2_offset
   );
 
   let assemblyFormat = [{
@@ -249,6 +250,7 @@ def XTPU_ComputeOp : XTPU_Op<"compute"> {
     `src_offset` `=` $src_offset
     `dst_offset` `=` $dst_offset
     `length` `=` $length
+    (`src2_offset` `=` $src2_offset^)?
     attr-dict
   }];
   let hasVerifier = 1;

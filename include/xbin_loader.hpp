@@ -59,27 +59,30 @@ struct XBinDMACommand {
 };
 static_assert(sizeof(XBinDMACommand) == 40, "XBinDMACommand must be 40 bytes");
 
-// Binary-encoded Compute command (fixed 24 bytes)
+// Binary-encoded Compute command (fixed 28 bytes)
+// P5-11: added src2_offset for dual-operand ops
 struct XBinComputeCommand {
-    uint32_t type;                // 0=NOP, 1=MATMUL, 2=VECTOR, 3=SCALAR
+    uint32_t type;                // 0=NOP,1=MATMUL,2=VECTOR,3=SCALAR,4=ADD,...
     int32_t  buffer_idx;
     uint32_t simulated_duration;
     uint32_t src_offset;
     uint32_t dst_offset;
     uint32_t length;
+    uint32_t src2_offset;         // P5-11: second operand (for ADD/MUL/SUB/MAX)
 };
-static_assert(sizeof(XBinComputeCommand) == 24, "XBinComputeCommand must be 24 bytes");
+static_assert(sizeof(XBinComputeCommand) == 28, "XBinComputeCommand must be 28 bytes");
 
-// Binary-encoded VLIWPacket (fixed 132 bytes)
+// Binary-encoded VLIWPacket (fixed 140 bytes)
+// P5-11: grew from 132 to 140 bytes (2 × 4 bytes for src2_offset)
 struct XBinPacket {
     XBinDMACommand     sdma;       // 40 bytes
     XBinDMACommand     idma;       // 40 bytes
-    XBinComputeCommand pu0;        // 24 bytes
-    XBinComputeCommand pu1;        // 24 bytes
+    XBinComputeCommand pu0;        // 28 bytes
+    XBinComputeCommand pu1;        // 28 bytes
     uint32_t           sync_mask;  //  4 bytes
-    // Total: 132 bytes
+    // Total: 140 bytes
 };
-static_assert(sizeof(XBinPacket) == 132, "XBinPacket must be 132 bytes");
+static_assert(sizeof(XBinPacket) == 140, "XBinPacket must be 140 bytes");
 
 #pragma pack(pop)
 
@@ -194,6 +197,7 @@ private:
             pkt.pu0_op.src_offset = bin_pkt.pu0.src_offset;
             pkt.pu0_op.dst_offset = bin_pkt.pu0.dst_offset;
             pkt.pu0_op.length = bin_pkt.pu0.length;
+            pkt.pu0_op.src2_offset = bin_pkt.pu0.src2_offset;
 
             // Decode PU1
             pkt.pu1_op.type = static_cast<ComputeType>(bin_pkt.pu1.type);
@@ -202,6 +206,7 @@ private:
             pkt.pu1_op.src_offset = bin_pkt.pu1.src_offset;
             pkt.pu1_op.dst_offset = bin_pkt.pu1.dst_offset;
             pkt.pu1_op.length = bin_pkt.pu1.length;
+            pkt.pu1_op.src2_offset = bin_pkt.pu1.src2_offset;
 
             // Decode sync_mask
             pkt.sync_mask = bin_pkt.sync_mask;

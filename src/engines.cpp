@@ -257,6 +257,15 @@ void ComputeEngine::process(const Compute_Command& cmd) {
         case ComputeType::MATMUL: latency = timing_.matmul_latency; break;
         case ComputeType::VECTOR: latency = timing_.vector_latency; break;
         case ComputeType::SCALAR: latency = timing_.scalar_latency; break;
+        // P5-11: extended ops use scalar latency (element-wise operations)
+        case ComputeType::ADD:
+        case ComputeType::MUL:
+        case ComputeType::SUB:
+        case ComputeType::RELU:
+        case ComputeType::MAX:
+        case ComputeType::REDUCE_SUM:
+        case ComputeType::REDUCE_MAX:
+            latency = timing_.scalar_latency; break;
         default: break;
     }
 
@@ -341,6 +350,107 @@ void ComputeEngine::process(const Compute_Command& cmd) {
             local_mem_.write_buffer(cmd.buffer_idx,
                                     static_cast<uint64_t>(cmd.dst_offset),
                                     C.data(), cmd.length);
+
+        // ---------------------------------------------------------------
+        // P5-11: Extended ISA — element-wise dual-operand operations
+        // src_a at src_offset, src_b at src2_offset, result at dst_offset
+        // All operate on uint8_t with natural uint8 truncation.
+        // ---------------------------------------------------------------
+        } else if (cmd.type == ComputeType::ADD) {
+            std::vector<uint8_t> a(cmd.length), b(cmd.length);
+            local_mem_.read_buffer(cmd.buffer_idx,
+                                   static_cast<uint64_t>(cmd.src_offset),
+                                   a.data(), cmd.length);
+            local_mem_.read_buffer(cmd.buffer_idx,
+                                   static_cast<uint64_t>(cmd.src2_offset),
+                                   b.data(), cmd.length);
+            for (uint32_t i = 0; i < cmd.length; ++i)
+                a[i] = static_cast<uint8_t>((a[i] + b[i]) & 0xFF);
+            local_mem_.write_buffer(cmd.buffer_idx,
+                                    static_cast<uint64_t>(cmd.dst_offset),
+                                    a.data(), cmd.length);
+
+        } else if (cmd.type == ComputeType::MUL) {
+            std::vector<uint8_t> a(cmd.length), b(cmd.length);
+            local_mem_.read_buffer(cmd.buffer_idx,
+                                   static_cast<uint64_t>(cmd.src_offset),
+                                   a.data(), cmd.length);
+            local_mem_.read_buffer(cmd.buffer_idx,
+                                   static_cast<uint64_t>(cmd.src2_offset),
+                                   b.data(), cmd.length);
+            for (uint32_t i = 0; i < cmd.length; ++i)
+                a[i] = static_cast<uint8_t>(
+                    (static_cast<uint32_t>(a[i]) * b[i]) & 0xFF);
+            local_mem_.write_buffer(cmd.buffer_idx,
+                                    static_cast<uint64_t>(cmd.dst_offset),
+                                    a.data(), cmd.length);
+
+        } else if (cmd.type == ComputeType::SUB) {
+            std::vector<uint8_t> a(cmd.length), b(cmd.length);
+            local_mem_.read_buffer(cmd.buffer_idx,
+                                   static_cast<uint64_t>(cmd.src_offset),
+                                   a.data(), cmd.length);
+            local_mem_.read_buffer(cmd.buffer_idx,
+                                   static_cast<uint64_t>(cmd.src2_offset),
+                                   b.data(), cmd.length);
+            for (uint32_t i = 0; i < cmd.length; ++i)
+                a[i] = static_cast<uint8_t>((a[i] - b[i]) & 0xFF);
+            local_mem_.write_buffer(cmd.buffer_idx,
+                                    static_cast<uint64_t>(cmd.dst_offset),
+                                    a.data(), cmd.length);
+
+        } else if (cmd.type == ComputeType::RELU) {
+            std::vector<uint8_t> buf(cmd.length);
+            local_mem_.read_buffer(cmd.buffer_idx,
+                                   static_cast<uint64_t>(cmd.src_offset),
+                                   buf.data(), cmd.length);
+            // Interpret as signed int8, clamp negative to 0
+            for (uint32_t i = 0; i < cmd.length; ++i) {
+                int8_t val = static_cast<int8_t>(buf[i]);
+                buf[i] = (val < 0) ? 0 : buf[i];
+            }
+            local_mem_.write_buffer(cmd.buffer_idx,
+                                    static_cast<uint64_t>(cmd.dst_offset),
+                                    buf.data(), cmd.length);
+
+        } else if (cmd.type == ComputeType::MAX) {
+            std::vector<uint8_t> a(cmd.length), b(cmd.length);
+            local_mem_.read_buffer(cmd.buffer_idx,
+                                   static_cast<uint64_t>(cmd.src_offset),
+                                   a.data(), cmd.length);
+            local_mem_.read_buffer(cmd.buffer_idx,
+                                   static_cast<uint64_t>(cmd.src2_offset),
+                                   b.data(), cmd.length);
+            for (uint32_t i = 0; i < cmd.length; ++i)
+                a[i] = (a[i] > b[i]) ? a[i] : b[i];
+            local_mem_.write_buffer(cmd.buffer_idx,
+                                    static_cast<uint64_t>(cmd.dst_offset),
+                                    a.data(), cmd.length);
+
+        } else if (cmd.type == ComputeType::REDUCE_SUM) {
+            std::vector<uint8_t> buf(cmd.length);
+            local_mem_.read_buffer(cmd.buffer_idx,
+                                   static_cast<uint64_t>(cmd.src_offset),
+                                   buf.data(), cmd.length);
+            uint32_t sum = 0;
+            for (uint32_t i = 0; i < cmd.length; ++i)
+                sum += buf[i];
+            uint8_t result = static_cast<uint8_t>(sum & 0xFF);
+            local_mem_.write_buffer(cmd.buffer_idx,
+                                    static_cast<uint64_t>(cmd.dst_offset),
+                                    &result, 1);
+
+        } else if (cmd.type == ComputeType::REDUCE_MAX) {
+            std::vector<uint8_t> buf(cmd.length);
+            local_mem_.read_buffer(cmd.buffer_idx,
+                                   static_cast<uint64_t>(cmd.src_offset),
+                                   buf.data(), cmd.length);
+            uint8_t max_val = 0;
+            for (uint32_t i = 0; i < cmd.length; ++i)
+                if (buf[i] > max_val) max_val = buf[i];
+            local_mem_.write_buffer(cmd.buffer_idx,
+                                    static_cast<uint64_t>(cmd.dst_offset),
+                                    &max_val, 1);
         }
     } catch (const std::exception& e) {
         std::string msg = std::string("[Compute] Memory access error: ") + e.what();

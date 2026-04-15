@@ -35,9 +35,17 @@ struct DMA_Command {
 
 enum class ComputeType {
     NOP,
-    MATMUL,
-    VECTOR,
-    SCALAR
+    MATMUL,     // C = A × B, 4×4 uint8 (uint32 accum → uint8 truncation)
+    VECTOR,     // dst[i] = src[i] * src[i]  (legacy, kept for backward compat)
+    SCALAR,     // dst[i] = src[i] + 1       (legacy, kept for backward compat)
+    // --- P5-11: Extended ISA for mainstream AI models ---
+    ADD,        // dst[i] = src_a[i] + src_b[i]   (element-wise, dual-operand)
+    MUL,        // dst[i] = src_a[i] * src_b[i]   (element-wise, dual-operand)
+    SUB,        // dst[i] = src_a[i] - src_b[i]   (element-wise, dual-operand)
+    RELU,       // dst[i] = max(src[i], 0)         (single-operand)
+    MAX,        // dst[i] = max(src_a[i], src_b[i]) (element-wise, dual-operand)
+    REDUCE_SUM, // dst[0] = Σ src[i]                (reduction → scalar)
+    REDUCE_MAX, // dst[0] = max(src[i])              (reduction → scalar)
 };
 
 // ---------------------------------------------------------------------------
@@ -73,6 +81,9 @@ struct Compute_Command {
     uint32_t src_offset            = 0;   // P2-1: 輸入資料在 local_mem 的起始 offset
     uint32_t dst_offset            = 0;   // P2-1: 輸出資料在 local_mem 的起始 offset
     uint32_t length                = 0;   // P2-1: 操作長度（bytes）；0 = 只模擬延遲
+    // P5-11: dual-operand ops (ADD, MUL, SUB, MAX)
+    // src_a = src_offset, src_b = src2_offset
+    uint32_t src2_offset           = 0;   // Second operand offset (dual-op only)
 };
 
 struct VLIWPacket {
