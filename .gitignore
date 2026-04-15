@@ -1,0 +1,26 @@
+# Build artifacts
+*.o
+*.d
+test_simulator
+test_xbin_loader
+xbin_runner
+
+# OS
+.DS_Store
+
+# IDE
+.vscode/
+.idea/
+
+# lpddr5-sim submodule build output
+submodule/lpddr5-sim/build/
+
+# CMake build output (any subdirectory)
+**/build/
+CMakeCache.txt
+cmake_install.cmake
+
+# Compiler intermediate outputs (generated, not source)
+compiler/tests/*.xbin
+compiler/tests/*_tosa.mlir
+compiler/tests/*_xtpu.mlir
